@@ -1,25 +1,32 @@
-name: Java CI
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
+      - name: Authenticate to GCP via Workload Identity
+        uses: google-github-actions/auth@v1
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          workload_identity_provider: projects/1025569029916/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions-sa@createorder-490108.iam.gserviceaccount.com
 
-      - name: Build project
-        run: mvn clean install
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
 
-      - name: Run tests
-        run: mvn test
+      - name: Build and Push Docker Image via Cloud Build
+        run: gcloud builds submit --tag gcr.io/${{ secrets.PROJECT_ID }}/employee-service --project=${{ secrets.PROJECT_ID }} .
+
+      - name: Deploy to Cloud Run
+        run: gcloud run deploy employee-service --image=gcr.io/${{ secrets.PROJECT_ID }}/employee-service --platform=managed --region=asia-south1 --allow-unauthenticated --add-cloudsql-instances=createorder-490108:asia-south1:emp-db-new --memory=512Mi --project=${{ secrets.PROJECT_ID }}
