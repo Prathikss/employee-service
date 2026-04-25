@@ -16,17 +16,33 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build JAR with Maven
+        run: mvn clean package -DskipTests
+
       - name: Authenticate to GCP via Workload Identity
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: projects/1025569029916/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-actions-sa@createorder-490108.iam.gserviceaccount.com
+          token_format: access_token
 
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Build and Push Docker Image via Cloud Build
-        run: gcloud builds submit --tag gcr.io/${{ secrets.PROJECT_ID }}/employee-service --project=${{ secrets.PROJECT_ID }} --suppress-logs .
+      - name: Configure Docker to use GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build Docker Image
+        run: docker build -t gcr.io/${{ secrets.PROJECT_ID }}/employee-service:${{ github.sha }} .
+
+      - name: Push Docker Image to GCR
+        run: docker push gcr.io/${{ secrets.PROJECT_ID }}/employee-service:${{ github.sha }}
 
       - name: Deploy to Cloud Run
-        run: gcloud run deploy employee-service --image=gcr.io/${{ secrets.PROJECT_ID }}/employee-service --platform=managed --region=asia-south1 --allow-unauthenticated --add-cloudsql-instances=createorder-490108:asia-south1:emp-db-new --memory=512Mi --project=${{ secrets.PROJECT_ID }}
+        run: gcloud run deploy employee-service --image=gcr.io/${{ secrets.PROJECT_ID }}/employee-service:${{ github.sha }} --platform=managed --region=asia-south1 --allow-unauthenticated --add-cloudsql-instances=createorder-490108:asia-south1:emp-db-new --memory=512Mi --project=${{ secrets.PROJECT_ID }}
