@@ -24,7 +24,11 @@ public class EmployeeService {
         return repository.findAll();
     }
 
-    public void deleteById(Long id) {
+    public Employee deleteById(Long id) {
+        Employee emp = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
         repository.deleteById(id);
+        return emp;
     }
 }
